@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Threading;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -15,26 +16,27 @@ namespace Mandelbrot {
         public int PixelOffsetY;
     }
 
-    public partial class MainWindow : Window {
+    public partial class MandelbrotWindow : ComplexFunctionWindow {
 
         WriteableBitmap bmp;
         Complex center = new Complex( 0.0, 0.0 );
         double scale = 4.0;
-        int pixels;
+        int pixels = 1200;
         readonly int BLOCK_SIZE = 50;
 
-        public MainWindow( ) {
-            InitializeComponent( );
-            pixels = Convert.ToInt32( Pic.Height );
+        public MandelbrotWindow( ) {
+            this.Title = "Mandelbrot Fractal";
+            SizeToContent = SizeToContent.WidthAndHeight;
+            var image = new Image( );
+            image.Width = 1200;
+            image.Height = 1200;
+            this.Content = image;
             bmp = new WriteableBitmap( pixels, pixels, 96, 96, PixelFormats.Bgra32, null );
-            Pic.Source = bmp;
+            image.Source = bmp;
+            Draw( );
         }
 
         private readonly byte[] BLACK = new byte[] { 0, 0, 0, 255 };
-
-        private void Window_Loaded( object sender, RoutedEventArgs e ) {
-            Draw( );
-        }
 
         private double Step { get { return scale / pixels; } }
 
@@ -46,19 +48,18 @@ namespace Mandelbrot {
             for ( int y_block = 0; y_block < block_count; ++y_block ) {
                 for ( int x_block = 0; x_block < block_count; ++x_block ) {
                     var blockOrigin = new Complex( origin.Real + x_block * BlockRealSize, origin.Imaginary + y_block * BlockRealSize );
-                    var blockParams = new BlockParams {  Origin = blockOrigin, PixelOffsetX = x_block * BLOCK_SIZE, PixelOffsetY = y_block * BLOCK_SIZE };
+                    var blockParams = new BlockParams { Origin = blockOrigin, PixelOffsetX = x_block * BLOCK_SIZE, PixelOffsetY = y_block * BLOCK_SIZE };
                     ThreadPool.QueueUserWorkItem( new WaitCallback( DrawBlockOuter ), blockParams );
                 }
             }
         }
 
         private void DrawBlockOuter( object state ) {
-            Dispatcher.BeginInvoke( new Action( ( ) => {
-                DrawBlock( (BlockParams)state );
-            } ), DispatcherPriority.Background );
+            DrawBlock( (BlockParams)state );
         }
 
         private void DrawBlock( BlockParams par ) {
+            byte[] buffer = new byte[BLOCK_SIZE * BLOCK_SIZE * 4];
             for ( int y = 0; y < BLOCK_SIZE; ++y ) {
                 for ( int x = 0; x < BLOCK_SIZE; ++x ) {
                     var pixel_x = x + par.PixelOffsetX;
@@ -67,9 +68,16 @@ namespace Mandelbrot {
                     var c = par.Origin + new Complex( x * Step, y * Step );
                     var iterations = Iterations( c );
                     var color = iterations.HasValue ? ColorMap( iterations.Value ) : BLACK;
-                    bmp.WritePixels( new Int32Rect( pixel_x, pixel_y, 1, 1 ), color, 4, 0 );
+                    var bufferOffset = ( y * BLOCK_SIZE + x ) * 4;
+                    buffer[bufferOffset] = color[0];
+                    buffer[bufferOffset + 1] = color[1];
+                    buffer[bufferOffset + 2] = color[2];
+                    buffer[bufferOffset + 3] = color[3];
                 }
             }
+            Dispatcher.BeginInvoke( new Action( ( ) => {
+                bmp.WritePixels( new Int32Rect( 0, 0, BLOCK_SIZE, BLOCK_SIZE ), buffer, 4 * BLOCK_SIZE, par.PixelOffsetX, par.PixelOffsetY );
+            } ), DispatcherPriority.Background );
         }
 
         private static int? Iterations( Complex c ) {
