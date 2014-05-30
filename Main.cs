@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace Mandelbrot {
+
     class Mandelbrot {
         [STAThread]
         static void Main( ) {
@@ -13,4 +14,5 @@ namespace Mandelbrot {
             app.Run( new MandelbrotWindow( ) );
         }
     }
+
 }

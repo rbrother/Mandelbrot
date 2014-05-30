@@ -50,7 +50,7 @@
     <Reference Include="PresentationFramework" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="GraphicsWindow.cs" />
+    <Compile Include="ComplexFunctionWindow.cs" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Main.cs" />
