@@ -64,21 +64,22 @@ abstract public class ComplexFunctionWindow : Window {
     }
 
     void image_MouseWheel( object sender, System.Windows.Input.MouseWheelEventArgs e ) {
-        var Scale = 1.0 / (1.0 + 0.002 * e.Delta);
-        var invScale = 1.0 / Scale;
-        var transformed = new TransformedBitmap( Bmp, new ScaleTransform( invScale, invScale ) );
+        var Scale = 1.0 + 0.002 * Math.Abs( e.Delta );
+        if ( e.Delta < 0 ) Scale = 1.0 / Scale;
+        var InverseScale = 1.0 / Scale;
+        var transformed = new TransformedBitmap( Bmp, new ScaleTransform( Scale, Scale ) );
         var buffer = new byte[Pixels * Pixels * 4];
         if ( e.Delta > 0 ) {
-            var offset = Convert.ToInt32( Pixels * ( invScale - 1 ) * 0.5 );            
+            var offset = Convert.ToInt32( Pixels * ( Scale - 1 ) * 0.5 );            
             transformed.CopyPixels( new Int32Rect( offset, offset, Pixels, Pixels ), buffer, Pixels * 4, 0 );
             Bmp.WritePixels( new Int32Rect( 0, 0, Pixels, Pixels ), buffer, Pixels * 4, 0 );
         } else {
-            var offset = Convert.ToInt32( Pixels * ( 1 - invScale ) * 0.5 );
+            var offset = Convert.ToInt32( Pixels * ( 1 - Scale ) * 0.5 );
             transformed.CopyPixels( new Int32Rect( 0, 0, transformed.PixelWidth, transformed.PixelHeight ), buffer, Pixels * 4, 0 );
             Bmp.WritePixels( new Int32Rect( 0, 0, Pixels, Pixels ), new byte[Pixels * Pixels * 4], Pixels * 4, 0 ); // Clear
             Bmp.WritePixels( new Int32Rect( offset, offset, transformed.PixelWidth, transformed.PixelWidth ), buffer, Pixels * 4, 0 );
         }
-        RealSize = RealSize * Scale;
+        RealSize = RealSize * InverseScale;
         this.Title = string.Format( "Scale {0}", RealSize );
         Draw( );
     }
