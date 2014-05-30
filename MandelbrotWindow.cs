@@ -16,11 +16,4 @@ public class MandelbrotWindow : ComplexFunctionWindow {
         return Colors.Black;
     }
 
-    private Color ColorMap( int i ) {
-        return Color.FromRgb(
-            255,
-            Convert.ToByte( Math.Abs( 255 - i * 32 % 512 ) ),
-            Convert.ToByte( Math.Abs( 255 - i * 8 % 512 ) ) );
-    }
-
 } // class

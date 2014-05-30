@@ -113,6 +113,13 @@ abstract public class ComplexFunctionWindow : Window {
         } ), DispatcherPriority.Background );
     }
 
+    virtual protected Color ColorMap( int i ) {
+        return Color.FromRgb(
+            255,
+            Convert.ToByte( Math.Abs( 255 - i * 32 % 512 ) ),
+            Convert.ToByte( Math.Abs( 255 - i * 8 % 512 ) ) );
+    }
+
     protected abstract Color FunctionColor( Complex value );
 
 }
