@@ -8,6 +8,13 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Numerics;
 
+public static class ComplexExtensions {
+
+    public static double MagnitudeSqr( this Complex c ) {
+        return c.Real * c.Real + c.Imaginary * c.Imaginary;
+    }
+}
+
 internal class BlockParams {
     public Complex Origin;
     public int PixelOffsetX;

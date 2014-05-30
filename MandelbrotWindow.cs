@@ -10,7 +10,7 @@ public class MandelbrotWindow : ComplexFunctionWindow {
         int max_iteration = 512;
         while ( iteration < max_iteration ) {
             z = z * z + c;
-            if ( z.Magnitude > 2 ) return ColorMap(iteration);
+            if ( z.MagnitudeSqr() > 4 ) return ColorMap(iteration);
             iteration += 1;
         }
         return Colors.Black;
