@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
@@ -6,6 +7,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Diagnostics;
 using System.Numerics;
 
 public static class ComplexExtensions {
@@ -30,6 +32,9 @@ abstract public class ComplexFunctionWindow : Window {
     readonly int BlockPixelSize = 100;
     private CancellationTokenSource _cancellationSource = null;
     private CancellationToken _cancellationToken;
+    
+    private int totalBlocks = 0;
+    private int acceleratedBlocks = 0;
 
     double RealWidth { get { return RealHeight * PixelWidth / PixelHeight; } }
 
@@ -39,7 +44,6 @@ abstract public class ComplexFunctionWindow : Window {
     public ComplexFunctionWindow( ) {
         this.WindowState = System.Windows.WindowState.Maximized;
         this.WindowStyle = System.Windows.WindowStyle.None;
-        this.Topmost = true;
         Center = new Complex( 0.0, 0.0 );
         image = new Image( );
         this.Content = image;
@@ -53,13 +57,13 @@ abstract public class ComplexFunctionWindow : Window {
 
     private Complex Origin { get { return new Complex( Center.Real - RealWidth * 0.5, Center.Imaginary - RealHeight * 0.5 ); } }
 
-    private double Step { get { return RealHeight / PixelHeight; } }
+    private double PixelStep { get { return RealHeight / PixelHeight; } }
 
-    private double BlockRealSize { get { return BlockPixelSize * Step; } }
+    private double BlockRealSize { get { return BlockPixelSize * PixelStep; } }
 
     void image_MouseUp( object sender, System.Windows.Input.MouseButtonEventArgs e ) {
         var pos = e.MouseDevice.GetPosition( image );
-        Center = Origin + new Complex( pos.X, pos.Y ) * Step;
+        Center = Origin + new Complex( pos.X, pos.Y ) * PixelStep;
         Draw( );
     }
 
@@ -91,36 +95,57 @@ abstract public class ComplexFunctionWindow : Window {
             Bmp.WritePixels( new Int32Rect( offsetX, offsetY, (int)transformed.Width, (int)transformed.Height ), buffer, PixelWidth * 4, 0 );
         }
         RealHeight = RealHeight * InverseScale;
-        this.Title = string.Format( "Scale {0}", RealHeight );
         Draw( );
     }
 
     private void Draw( ) {
+        var start = DateTime.Now;
         int BlockCountX = PixelWidth / BlockPixelSize;
         int BlockCountY = PixelHeight / BlockPixelSize;
         if ( _cancellationSource != null ) _cancellationSource.Cancel( );
         _cancellationSource = new CancellationTokenSource( );
         _cancellationToken = _cancellationSource.Token;
+        var tasks = new List<Task>( );
         for ( int y_block = 0; y_block < BlockCountY; ++y_block ) {
             for ( int x_block = 0; x_block < BlockCountX; ++x_block ) {
                 var blockOrigin = Origin + new Complex( x_block, y_block ) * BlockRealSize;
                 var blockParams = new BlockParams { Origin = blockOrigin, PixelOffsetX = x_block * BlockPixelSize, PixelOffsetY = y_block * BlockPixelSize };
-                Task.Factory.StartNew( new Action( ( ) => DrawBlock( blockParams ) ), _cancellationToken );
+                tasks.Add( Task.Factory.StartNew( new Action( ( ) => DrawBlock( blockParams ) ), _cancellationToken ) );
             }
         }
+        Task.Factory.ContinueWhenAll( tasks.ToArray( ), new Action<Task[]>( t => {
+            Dispatcher.BeginInvoke( new Action( ( ) => {
+                var duration = DateTime.Now - start;
+                Debug.Print("Finished: Scale {0}, duration {1:0.0} sec, Normal/accelerated blocks {2}/{3}", 
+                    RealHeight, duration.TotalSeconds, acceleratedBlocks, totalBlocks ); 
+                acceleratedBlocks = 0;
+                totalBlocks = 0;
+            } ) ); 
+        } ) );
+    }
+
+    private bool EdgesHaveColor( BlockParams par, Color color ) {
+        for ( int n = 0; n < BlockPixelSize; ++n ) {
+            var points = new Complex[] { new Complex( 0, n ), new Complex( BlockPixelSize, n ), new Complex( n, 0 ), new Complex( n, BlockPixelSize ) };
+            foreach ( var point in points ) {
+                if ( FunctionColor( par.Origin + point * PixelStep ) != color ) return false;
+            }
+        }
+        acceleratedBlocks++;
+        return true;
     }
 
     private void DrawBlock( BlockParams par ) {
         if ( _cancellationToken.IsCancellationRequested ) return;
+        totalBlocks++;
+        // Quick method: if edges of the block are same color, then internal must be also (speeds up black areas)
+        var topLeftColor = FunctionColor( par.Origin );
+        Color? singleColor = EdgesHaveColor( par, topLeftColor ) ? (Color?) topLeftColor : null;
         byte[] buffer = new byte[BlockPixelSize * BlockPixelSize * 4];
         for ( int y = 0; y < BlockPixelSize; ++y ) {
             for ( int x = 0; x < BlockPixelSize; ++x ) {
                 if ( _cancellationToken.IsCancellationRequested ) return;
-                var pixel_x = x + par.PixelOffsetX;
-                var pixel_y = y + par.PixelOffsetY;
-                if ( pixel_x >= PixelWidth || pixel_y >= PixelHeight ) continue;
-                var c = par.Origin + new Complex( x * Step, y * Step );
-                var color = FunctionColor(c);
+                var color = singleColor.HasValue ? singleColor.Value : FunctionColor( par.Origin + new Complex( x, y ) * PixelStep );
                 var bufferOffset = ( y * BlockPixelSize + x ) * 4;
                 buffer[bufferOffset] = color.B;
                 buffer[bufferOffset + 1] = color.G;
